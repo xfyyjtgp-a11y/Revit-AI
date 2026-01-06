@@ -1,0 +1,22 @@
+# Visual Studio & .NET
+.vs/
+bin/
+obj/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# VS Code / Trae
+.vscode/
+.trae/
+
+# Revit
+*.slog
+*.rws
+*.rvt
+*.rfa
+*.rte
+
+# Other
+*.log

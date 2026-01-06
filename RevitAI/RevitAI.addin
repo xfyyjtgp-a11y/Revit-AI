@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Command">
+    <Name>Revit AI Copilot</Name>
+    <Assembly>RevitAI.dll</Assembly>
+    <AddInId>B2E58301-4965-4309-8667-882236526118</AddInId>
+    <FullClassName>RevitAI.Command</FullClassName>
+    <Text>AI Create Wall</Text>
+    <Description>Use AI to create walls from natural language.</Description>
+    <VendorId>MyCompany</VendorId>
+    <VendorDescription>My Company Description</VendorDescription>
+  </AddIn>
+</RevitAddIns>

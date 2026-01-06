@@ -1,0 +1,58 @@
+using System;
+using System.IO;
+using System.Reflection;
+using System.Threading.Tasks;
+
+namespace RevitAI.Isolation
+{
+    public static class IsolatedRunner
+    {
+        /// <summary>
+        /// 在隔离的 AssemblyLoadContext 中运行 AI 逻辑，避免依赖冲突。
+        /// </summary>
+        public static async Task<string?> RunParseWallRequestAsync(string apiKey, string userInput)
+        {
+            string assemblyPath = Assembly.GetExecutingAssembly().Location;
+            string pluginPath = Path.GetDirectoryName(assemblyPath)!;
+
+            // 创建隔离上下文
+            var context = new PluginLoadContext(pluginPath);
+
+            try
+            {
+                // 1. 在隔离上下文中加载当前程序集
+                // 注意：必须重新加载 RevitAI.dll，因为我们需要其中的 AIService 类型
+                // 该类型将绑定到隔离上下文中的 Microsoft.SemanticKernel
+                Assembly isolatedAssembly = context.LoadFromAssemblyPath(assemblyPath);
+
+                // 2. 通过反射获取 AIService 类型
+                Type? aiServiceType = isolatedAssembly.GetType("RevitAI.Services.AIService");
+                if (aiServiceType == null) throw new InvalidOperationException("Could not find AIService type in isolated assembly.");
+
+                // 3. 创建实例
+                object? instance = Activator.CreateInstance(aiServiceType, new object[] { apiKey, "gpt-4o" });
+
+                // 4. 获取方法 ParseWallRequestJsonAsync (我们需要一个返回 string 的方法以避免类型转换问题)
+                MethodInfo? method = aiServiceType.GetMethod("ParseWallRequestJsonAsync");
+                
+                // 如果没有 Json 版本，我们先添加一个扩展或修改 AIService
+                if (method == null)
+                {
+                     // Fallback: use existing method and serialize inside via dynamic?
+                     // Easier to add a helper method in AIService.cs
+                     throw new InvalidOperationException("Method ParseWallRequestJsonAsync not found.");
+                }
+
+                // 5. 调用方法
+                Task<string?> task = (Task<string?>)method.Invoke(instance, new object[] { userInput })!;
+                
+                return await task.ConfigureAwait(false);
+            }
+            finally
+            {
+                // 卸载上下文
+                context.Unload();
+            }
+        }
+    }
+}
