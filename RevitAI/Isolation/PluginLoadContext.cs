@@ -15,7 +15,11 @@ namespace RevitAI.Isolation
         {
             _pluginPath = pluginPath;
         }
-
+        /// <summary>
+        /// 尝试从插件目录加载程序集
+        /// </summary>
+        /// <param name="assemblyName"></param>
+        /// <returns></returns>
         protected override Assembly? Load(AssemblyName assemblyName)
         {
             // 尝试从插件目录加载

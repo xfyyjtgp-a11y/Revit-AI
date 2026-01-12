@@ -24,7 +24,12 @@ namespace RevitAI
             // 虽然有了 Isolation，但保留这个以防万一
             AppDomain.CurrentDomain.AssemblyResolve += CurrentDomain_AssemblyResolve;
         }
-
+        /// <summary>
+        /// 程序集解析器，用于在当前域中解析依赖项
+        /// </summary>
+        /// <param name="sender">当前域对象，用于解析程序集</param>
+        /// <param name="args">解析事件参数，包含要解析的程序集名称</param>
+        /// <returns>解析后的程序集 如果解析成功；否则为 null</returns>
         private static Assembly? CurrentDomain_AssemblyResolve(object? sender, ResolveEventArgs args)
         {
             try

@@ -12,10 +12,16 @@ namespace RevitAI.Isolation
         /// </summary>
         public static async Task<string?> RunParseWallRequestAsync(string apiKey, string userInput)
         {
+            // 获取当前程序集路径 (RevitAI.dll)
             string assemblyPath = Assembly.GetExecutingAssembly().Location;
+            // 获取插件目录路径 (RevitAI.Plugins.dll)
             string pluginPath = Path.GetDirectoryName(assemblyPath)!;
 
             // 创建隔离上下文
+            // 原理说明：
+            // 当我们在该上下文中加载程序集或执行代码时，如果遇到未加载的依赖项（如 SemanticKernel.dll），
+            // CLR 会自动调用 PluginLoadContext.Load(AssemblyName) 方法。
+            // 我们不需要手动调用 Load 方法，它是由运行时在解析依赖时自动触发的"钩子"。
             var context = new PluginLoadContext(pluginPath);
 
             try
