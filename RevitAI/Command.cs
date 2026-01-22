@@ -1,8 +1,8 @@
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using RevitAI.Services;
 using RevitAI.Views;
+<<<<<<< HEAD
 using RevitAI.Isolation;
 using RevitAI.Models;
 using System;
@@ -10,6 +10,11 @@ using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+=======
+using System;
+using System.IO;
+using System.Reflection;
+>>>>>>> 28e3ac3b842c69db61e835714679f68146f36e40
 
 namespace RevitAI
 {
@@ -19,11 +24,13 @@ namespace RevitAI
         // ⚠️ 请在此处替换为您自己的 OpenAI API Key
         // 或者配置环境变量 "OPENAI_API_KEY"
         private const string OPENAI_API_KEY = "sk-wiwex9n08EZK9GwacRy4u4s3vJNykHRnc17vTLjxkrJ7kSBf";
+        
+        // 保持对 Window 的静态引用，避免重复打开或被 GC 回收
+        public static InputWindow? _inputWindow;
 
         static Command()
         {
             // 注册程序集解析器，帮助找到同一目录下的依赖项 (如 Semantic Kernel)
-            // 虽然有了 Isolation，但保留这个以防万一
             AppDomain.CurrentDomain.AssemblyResolve += CurrentDomain_AssemblyResolve;
         }
         /// <summary>
@@ -62,12 +69,10 @@ namespace RevitAI
                     return Result.Cancelled;
                 }
 
-                // 2. 显示 UI
-                var inputWindow = new InputWindow();
-                bool? dialogResult = inputWindow.ShowDialog();
-
-                if (inputWindow.IsConfirmed && !string.IsNullOrWhiteSpace(inputWindow.PromptText))
+                // 2. 检查窗口是否已打开
+                if (_inputWindow != null && _inputWindow.IsLoaded)
                 {
+<<<<<<< HEAD
                     // 3. 调用 AI 解析意图 (使用隔离上下文)
                     List<RevitTask>? tasks = null;
                     
@@ -102,8 +107,29 @@ namespace RevitAI
                     {
                         TaskDialog.Show("提示", "AI 未能识别出有效的建模指令。");
                     }
+=======
+                    _inputWindow.Activate();
+                    return Result.Succeeded;
+>>>>>>> 28e3ac3b842c69db61e835714679f68146f36e40
                 }
 
+                // 3. 初始化外部事件
+                // 创建 Handler (处理模型修改)
+                AIRequestHandler handler = new AIRequestHandler();
+                // 创建 ExternalEvent (注册到 Revit)
+                ExternalEvent exEvent = ExternalEvent.Create(handler);
+
+                // 4. 显示非模态窗口 (Modeless)
+                // 窗口不再阻塞 Revit 主线程，用户可以继续操作 Revit
+                // 当点击生成时，窗口会在后台运行 AI，然后通过 exEvent 通知 Revit 修改模型
+                _inputWindow = new InputWindow(exEvent, handler, apiKey);
+                
+                // 设置窗口 Owner 为 Revit 主窗口 (可选，防止窗口跑到 Revit 后面)
+                // 这里简单使用 .Show()
+                _inputWindow.Show();
+
+                // 5. 立即返回 Succeeded
+                // Revit 认为命令已完成，恢复响应。实际的 AI 任务在后台继续。
                 return Result.Succeeded;
             }
             catch (Exception ex)

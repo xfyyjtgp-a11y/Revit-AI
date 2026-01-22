@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RevitAI 隔离环境演示 (Enhanced)</title>
+    <style>
+        :root {
+            --primary-color: #007acc;
+            --secondary-color: #e0e0e0;
+            --success-color: #4caf50;
+            --warning-color: #ff9800;
+            --danger-color: #f44336;
+            --bg-color: #1e1e1e;
+            --text-color: #d4d4d4;
+            --code-bg: #2d2d2d;
+            --glow-color: rgba(0, 122, 204, 0.5);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            background-color: #252526;
+            padding: 10px 20px;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+        }
+
+        h1 { margin: 0; font-size: 1.2rem; }
+
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* 左侧演示区 */
+        .simulation-area {
+            flex: 1;
+            padding: 20px;
+            position: relative;
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 20px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .main-process {
+            width: 85%;
+            height: 85%;
+            border: 3px solid #555;
+            border-radius: 10px;
+            position: relative;
+            background-color: rgba(30, 30, 30, 0.95);
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+            transition: all 0.5s;
+            overflow: hidden;
+        }
+        
+        /* 主进程背景呼吸效果 */
+        @keyframes pulse-bg {
+            0% { box-shadow: 0 0 20px rgba(0,0,0,0.5) inset; }
+            50% { box-shadow: 0 0 40px rgba(0, 122, 204, 0.1) inset; }
+            100% { box-shadow: 0 0 20px rgba(0,0,0,0.5) inset; }
+        }
+        .main-process { animation: pulse-bg 4s infinite; }
+
+        .main-process::before {
+            content: "Revit.exe Process (PID: 1234)";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            background-color: #333;
+            color: #aaa;
+            padding: 5px 15px;
+            font-size: 0.8rem;
+            font-family: monospace;
+            border-bottom: 1px solid #555;
+        }
+
+        .revit-app {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            width: 160px;
+            height: 100px;
+            background: linear-gradient(135deg, #3c3c3c, #252526);
+            border: 2px solid #007acc;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            color: #fff;
+            z-index: 5;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .revit-app::after {
+            content: "";
+            position: absolute;
+            bottom: -5px;
+            right: -5px;
+            width: 10px;
+            height: 10px;
+            background-color: #4caf50;
+            border-radius: 50%;
+            box-shadow: 0 0 5px #4caf50;
+        }
+
+        /* 隔离环境盒子 */
+        .isolation-context {
+            position: absolute;
+            top: 55%;
+            left: 55%;
+            transform: translate(-50%, -50%) scale(0);
+            width: 450px;
+            height: 350px;
+            border: 2px dashed var(--warning-color);
+            border-radius: 15px;
+            background-color: rgba(45, 45, 45, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 10;
+            box-shadow: 0 0 30px rgba(255, 152, 0, 0.1);
+        }
+
+        .isolation-context.active {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .isolation-context::before {
+            content: "🛡️ PluginLoadContext (Isolated)";
+            position: absolute;
+            top: -15px;
+            right: 20px;
+            background-color: var(--warning-color);
+            color: #1e1e1e;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        /* 内存网格背景 */
+        .memory-grid {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: linear-gradient(rgba(255, 152, 0, 0.05) 1px, transparent 1px),
+                            linear-gradient(90deg, rgba(255, 152, 0, 0.05) 1px, transparent 1px);
+            background-size: 20px 20px;
+            border-radius: 13px;
+            z-index: -1;
+        }
+
+        /* DLL 对象容器 */
+        .assemblies-container {
+            display: flex;
+            gap: 20px;
+            align-items: flex-end;
+            margin-bottom: 20px;
+        }
+
+        .dll-object {
+            width: 100px;
+            height: 120px;
+            background: linear-gradient(135deg, #569cd6, #2d6da3);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+            transform: translateY(50px) scale(0.8);
+            opacity: 0;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .dll-object.loaded {
+            transform: translateY(0) scale(1);
+            opacity: 1;
+        }
+        
+        /* 依赖项样式 */
+        .dll-object.dependency {
+            background: linear-gradient(135deg, #ce9178, #a8654a);
+            width: 90px;
+            height: 100px;
+        }
+
+        .dll-icon { font-size: 2.5rem; margin-bottom: 5px; text-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+        .dll-name { font-size: 0.8rem; font-weight: bold; text-align: center; padding: 0 5px; }
+        .dll-sub { font-size: 0.65rem; color: rgba(255,255,255,0.7); }
+
+        /* 反射扫描光效 */
+        @keyframes scan-line {
+            0% { top: 0; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        .scan-effect {
+            position: absolute;
+            left: 0; right: 0;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 10px #fff;
+            display: none;
+            z-index: 20;
+        }
+
+        .dll-object.scanning .scan-effect {
+            display: block;
+            animation: scan-line 1s ease-in-out infinite;
+        }
+
+        /* 实例化对象 (幽灵) */
+        .instance-ghost {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 80px; height: 80px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid #fff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 2rem;
+            opacity: 0;
+            transition: all 0.5s;
+            box-shadow: 0 0 20px rgba(255,255,255,0.2);
+        }
+
+        .instance-ghost.active {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+            background: rgba(86, 156, 214, 0.3);
+            border-color: #569cd6;
+        }
+
+        /* 数据包动画 */
+        .data-packet {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background: radial-gradient(circle at 30% 30%, #81c784, #4caf50);
+            border-radius: 50%;
+            display: none;
+            z-index: 30;
+            box-shadow: 0 0 15px var(--success-color);
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .data-packet::after {
+            content: "IN";
+            font-size: 8px;
+        }
+        
+        .data-packet.result {
+            background: radial-gradient(circle at 30% 30%, #ffd54f, #ffb300);
+            box-shadow: 0 0 15px #ffb300;
+        }
+        .data-packet.result::after { content: "JSON"; color: black; }
+
+        /* 粒子爆炸效果 */
+        .particle {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background-color: var(--warning-color);
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        @keyframes explode {
+            0% { transform: translate(0, 0) scale(1); opacity: 1; }
+            100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+        }
+
+        /* 右侧代码区 */
+        .code-area {
+            width: 420px;
+            background-color: #252526;
+            border-left: 1px solid #3e3e42;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -5px 0 15px rgba(0,0,0,0.3);
+        }
+
+        .steps-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .step-item {
+            margin-bottom: 25px;
+            opacity: 0.3;
+            transition: all 0.4s;
+            border-left: 3px solid #3e3e42;
+            padding-left: 15px;
+            transform: translateX(0);
+        }
+
+        .step-item.active {
+            opacity: 1;
+            border-left-color: var(--primary-color);
+            transform: translateX(5px);
+        }
+
+        .step-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            font-size: 1.05rem;
+        }
+
+        .step-desc {
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            color: #ccc;
+            line-height: 1.4;
+        }
+
+        .code-block {
+            background-color: var(--code-bg);
+            padding: 12px;
+            border-radius: 6px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: #d4d4d4;
+            overflow-x: auto;
+            border: 1px solid #3e3e42;
+            position: relative;
+        }
+
+        .step-item.active .code-block {
+            border-color: #569cd6;
+            box-shadow: 0 0 10px rgba(0, 122, 204, 0.1);
+        }
+
+        .keyword { color: #569cd6; }
+        .type { color: #4ec9b0; }
+        .string { color: #ce9178; }
+        .comment { color: #6a9955; }
+        .method { color: #dcdcaa; }
+
+        /* 控制栏 */
+        .controls {
+            padding: 20px;
+            background-color: #1e1e1e;
+            border-top: 1px solid #3e3e42;
+            display: flex;
+            gap: 15px;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+            font-family: inherit;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        #nextBtn {
+            background: linear-gradient(to bottom, #007acc, #005a9e);
+            color: white;
+            flex: 2;
+            box-shadow: 0 4px 0 #004080;
+        }
+
+        #nextBtn:hover { transform: translateY(-1px); box-shadow: 0 5px 0 #004080; }
+        #nextBtn:active { transform: translateY(2px); box-shadow: 0 2px 0 #004080; }
+        #nextBtn:disabled { background: #444; color: #888; box-shadow: none; cursor: not-allowed; transform: none; }
+
+        #resetBtn {
+            background-color: #333;
+            color: white;
+            flex: 1;
+            border: 1px solid #555;
+        }
+        #resetBtn:hover { background-color: #444; }
+
+        /* 动画路径 */
+        @keyframes path-in {
+            0% { top: 90px; left: 120px; opacity: 0; transform: scale(0.5); }
+            10% { opacity: 1; transform: scale(1); }
+            40% { top: 90px; left: 250px; } /* 移动到中间 */
+            60% { top: 55%; left: 40%; } /* 向下移动到 context 附近 */
+            100% { top: 55%; left: 55%; transform: scale(0.8); } /* 进入 context */
+        }
+
+        @keyframes gear-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .gear-icon {
+            font-size: 2rem;
+            color: #ddd;
+            display: none;
+            position: absolute;
+            top: 40%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 25;
+        }
+
+        .gear-icon.spinning {
+            display: block;
+            animation: gear-spin 1s linear infinite;
+        }
+        
+        /* 状态标签 */
+        .status-badge {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.75rem;
+            padding: 3px 8px;
+            border-radius: 10px;
+            background: rgba(0,0,0,0.5);
+            color: #aaa;
+            white-space: nowrap;
+        }
+
+    </style>
+</head>
+<body>
+    <header>
+        <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:1.5rem;">🔬</span>
+            <h1>RevitAI 隔离加载原理可视化</h1>
+        </div>
+        <div style="font-size:0.8rem; color:#888;">Powered by Trae</div>
+    </header>
+
+    <div class="container">
+        <!-- 视觉演示区 -->
+        <div class="simulation-area">
+            <div class="main-process" id="mainProc">
+                <!-- Revit App Node -->
+                <div class="revit-app">
+                    <div style="font-size:2rem; margin-bottom:5px;">🏗️</div>
+                    <div style="font-weight:bold;">Revit Host</div>
+                    <div style="font-size:0.7rem; color:#aaa; margin-top:2px;">Plugin Runner</div>
+                </div>
+
+                <!-- 隔离环境 -->
+                <div class="isolation-context" id="isoContext">
+                    <div class="memory-grid"></div>
+                    
+                    <!-- DLLs -->
+                    <div class="assemblies-container">
+                        <div class="dll-object" id="dllRevitAI">
+                            <div class="scan-effect"></div>
+                            <div class="dll-icon">📦</div>
+                            <div class="dll-name">RevitAI.dll</div>
+                            <div class="dll-sub">v2.0 (Isolated)</div>
+                        </div>
+                        <div class="dll-object dependency" id="dllDep">
+                            <div class="dll-icon">🧩</div>
+                            <div class="dll-name">Semantic<br>Kernel</div>
+                            <div class="dll-sub">v1.0.1</div>
+                        </div>
+                    </div>
+
+                    <!-- 实例化的对象 -->
+                    <div class="instance-ghost" id="instanceGhost">
+                        🤖
+                    </div>
+
+                    <!-- 齿轮动画 -->
+                    <div class="gear-icon" id="gearIcon">⚙️</div>
+
+                    <div class="status-badge" id="ctxStatus">状态: 未初始化</div>
+                </div>
+
+                <!-- 传输的数据包 -->
+                <div class="data-packet" id="dataPacket"></div>
+            </div>
+        </div>
+
+        <!-- 代码步进区 -->
+        <div class="code-area">
+            <div class="steps-container">
+                <!-- Step 0 -->
+                <div class="step-item active" id="step0">
+                    <div class="step-title">0. 初始状态</div>
+                    <div class="step-desc">Revit 主进程运行中。此时如果直接加载新版 SemanticKernel，可能会与 Revit 自身引用的旧版冲突。</div>
+                </div>
+
+                <!-- Step 1 -->
+                <div class="step-item" id="step1">
+                    <div class="step-title">1. 创建隔离环境 (Context)</div>
+                    <div class="step-desc">开辟一块独立的内存区域 <code>PluginLoadContext</code>。这就像在房子里搭了一个完全密封的帐篷。</div>
+                    <div class="code-block">
+                        <span class="type">var</span> context = <span class="keyword">new</span> <span class="type">PluginLoadContext</span>(pluginPath);
+                    </div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="step-item" id="step2">
+                    <div class="step-title">2. 加载程序集 (Load)</div>
+                    <div class="step-desc">在隔离区内重新加载插件 DLL。它的所有依赖项（如 SemanticKernel）也会被加载到这个隔离区，与外部互不干扰。</div>
+                    <div class="code-block">
+                        <span class="comment">// 重新加载自身到隔离区</span><br>
+                        <span class="type">Assembly</span> isoAssm = context.<span class="method">LoadFromAssemblyPath</span>(path);
+                    </div>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="step-item" id="step3">
+                    <div class="step-title">3. 反射与执行 (Invoke)</div>
+                    <div class="step-desc">
+                        1. <strong>反射扫描</strong>：在隔离区找到 <code>AIService</code> 类型。<br>
+                        2. <strong>实例化</strong>：创建 AI 服务实例。<br>
+                        3. <strong>调用</strong>：传入字符串，获取 JSON 结果。
+                    </div>
+                    <div class="code-block">
+                        <span class="type">Type</span> t = isoAssm.<span class="method">GetType</span>(<span class="string">"AIService"</span>);<br>
+                        <span class="type">object</span> obj = <span class="type">Activator</span>.<span class="method">CreateInstance</span>(t);<br>
+                        <span class="type">var</span> json = method.<span class="method">Invoke</span>(obj, input);
+                    </div>
+                </div>
+
+                <!-- Step 4 -->
+                <div class="step-item" id="step4">
+                    <div class="step-title">4. 卸载与清理 (Unload)</div>
+                    <div class="step-desc">任务完成。销毁整个上下文，释放所有加载的 DLL 和内存。此时没有任何副作用残留。</div>
+                    <div class="code-block">
+                        context.<span class="method">Unload</span>();
+                        <span class="comment">// Garbage Collector will clean up</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button id="resetBtn" onclick="resetDemo()">↺ 重置</button>
+                <button id="nextBtn" onclick="nextStep()">▶ 下一步 (1/4)</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 0;
+        const totalSteps = 4;
+
+        // Elements
+        const isoContext = document.getElementById('isoContext');
+        const dllRevitAI = document.getElementById('dllRevitAI');
+        const dllDep = document.getElementById('dllDep');
+        const instanceGhost = document.getElementById('instanceGhost');
+        const dataPacket = document.getElementById('dataPacket');
+        const gearIcon = document.getElementById('gearIcon');
+        const ctxStatus = document.getElementById('ctxStatus');
+        const nextBtn = document.getElementById('nextBtn');
+        const mainProc = document.getElementById('mainProc');
+
+        function updateUI() {
+            // Steps highlight
+            document.querySelectorAll('.step-item').forEach((el, idx) => {
+                if (idx === currentStep) {
+                    el.classList.add('active');
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else {
+                    el.classList.remove('active');
+                }
+            });
+
+            // Button state
+            if (currentStep < totalSteps) {
+                nextBtn.innerHTML = `▶ 下一步 (${currentStep + 1}/${totalSteps})`;
+                nextBtn.disabled = false;
+            } else {
+                nextBtn.innerHTML = "✅ 演示结束";
+                nextBtn.disabled = true;
+            }
+        }
+
+        function createParticles(element) {
+            const rect = element.getBoundingClientRect();
+            const containerRect = mainProc.getBoundingClientRect();
+            
+            // Convert to relative coords inside mainProc
+            const startX = rect.left - containerRect.left + rect.width / 2;
+            const startY = rect.top - containerRect.top + rect.height / 2;
+
+            for (let i = 0; i < 20; i++) {
+                const p = document.createElement('div');
+                p.classList.add('particle');
+                p.style.left = startX + 'px';
+                p.style.top = startY + 'px';
+                
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 50 + Math.random() * 100;
+                const tx = Math.cos(angle) * dist + 'px';
+                const ty = Math.sin(angle) * dist + 'px';
+                
+                p.style.setProperty('--tx', tx);
+                p.style.setProperty('--ty', ty);
+                p.style.animation = `explode 0.6s ease-out forwards`;
+                
+                mainProc.appendChild(p);
+                setTimeout(() => p.remove(), 600);
+            }
+        }
+
+        async function nextStep() {
+            nextBtn.disabled = true; // Prevent spamming
+            currentStep++;
+            
+            switch(currentStep) {
+                case 1: // Create Context
+                    isoContext.classList.add('active');
+                    ctxStatus.innerText = "状态: 内存分配完成";
+                    ctxStatus.style.color = "#4caf50";
+                    nextBtn.disabled = false;
+                    break;
+
+                case 2: // Load DLLs
+                    ctxStatus.innerText = "状态: 加载依赖中...";
+                    // Staggered animation
+                    setTimeout(() => dllRevitAI.classList.add('loaded'), 100);
+                    setTimeout(() => dllDep.classList.add('loaded'), 400);
+                    setTimeout(() => {
+                        ctxStatus.innerText = "状态: 程序集已就绪";
+                        nextBtn.disabled = false;
+                    }, 800);
+                    break;
+
+                case 3: // Invoke
+                    // 1. Scan
+                    dllRevitAI.classList.add('scanning');
+                    ctxStatus.innerText = "状态: 反射查找类型...";
+                    
+                    await new Promise(r => setTimeout(r, 1200));
+                    dllRevitAI.classList.remove('scanning');
+                    
+                    // 2. Instantiate
+                    ctxStatus.innerText = "状态: 实例化对象...";
+                    instanceGhost.classList.add('active');
+                    
+                    await new Promise(r => setTimeout(r, 800));
+                    
+                    // 3. Data Flow Animation
+                    ctxStatus.innerText = "状态: 执行方法...";
+                    
+                    // Packet enters
+                    const revitRect = document.querySelector('.revit-app').getBoundingClientRect();
+                    const ghostRect = instanceGhost.getBoundingClientRect();
+                    const procRect = mainProc.getBoundingClientRect();
+
+                    // Initial pos (at Revit App)
+                    const p1x = 120; // Approx relative
+                    const p1y = 90;
+                    
+                    // Target pos (at Ghost)
+                    // We hardcode animation path in CSS for simplicity, but JS sets start/end logic
+                    dataPacket.style.display = 'flex';
+                    dataPacket.style.top = p1y + 'px';
+                    dataPacket.style.left = p1x + 'px';
+                    
+                    // Animate In
+                    dataPacket.animate([
+                        { top: p1y + 'px', left: p1x + 'px', opacity: 1, transform: 'scale(1)' },
+                        { top: '55%', left: '55%', transform: 'scale(1)' } // Center of ghost
+                    ], { duration: 1000, easing: 'ease-in-out', fill: 'forwards' });
+
+                    await new Promise(r => setTimeout(r, 1000));
+                    
+                    // Processing
+                    gearIcon.classList.add('spinning');
+                    dataPacket.style.opacity = 0; // Hide packet inside gear
+                    
+                    await new Promise(r => setTimeout(r, 1500));
+                    
+                    // Animate Out
+                    gearIcon.classList.remove('spinning');
+                    dataPacket.classList.add('result'); // Change color to gold
+                    dataPacket.style.opacity = 1;
+                    
+                    dataPacket.animate([
+                        { top: '55%', left: '55%', transform: 'scale(1)' },
+                        { top: p1y + 'px', left: p1x + 'px', transform: 'scale(1.2)' }
+                    ], { duration: 1000, easing: 'ease-in-out', fill: 'forwards' });
+
+                    await new Promise(r => setTimeout(r, 1000));
+                    
+                    ctxStatus.innerText = "状态: 调用完成 (返回 JSON)";
+                    nextBtn.disabled = false;
+                    break;
+
+                case 4: // Unload
+                    ctxStatus.innerText = "状态: 正在卸载...";
+                    
+                    // Explode internals
+                    createParticles(dllRevitAI);
+                    createParticles(dllDep);
+                    createParticles(instanceGhost);
+                    
+                    // Hide internals immediately
+                    dllRevitAI.style.opacity = 0;
+                    dllDep.style.opacity = 0;
+                    instanceGhost.style.opacity = 0;
+                    dataPacket.style.display = 'none';
+
+                    await new Promise(r => setTimeout(r, 300));
+                    
+                    // Shrink context
+                    isoContext.classList.remove('active');
+                    ctxStatus.innerText = "状态: 已销毁";
+                    
+                    setTimeout(() => {
+                        nextBtn.disabled = false;
+                    }, 500);
+                    break;
+            }
+
+            updateUI();
+        }
+
+        function resetDemo() {
+            currentStep = 0;
+            
+            // Reset visual states
+            isoContext.classList.remove('active');
+            dllRevitAI.classList.remove('loaded', 'scanning');
+            dllDep.classList.remove('loaded');
+            instanceGhost.classList.remove('active');
+            gearIcon.classList.remove('spinning');
+            
+            dataPacket.style.display = 'none';
+            dataPacket.classList.remove('result');
+            dataPacket.getAnimations().forEach(anim => anim.cancel());
+
+            // Reset opacity manually changed in Unload
+            dllRevitAI.style.opacity = '';
+            dllDep.style.opacity = '';
+            instanceGhost.style.opacity = '';
+            
+            ctxStatus.innerText = "状态: 未初始化";
+            ctxStatus.style.color = "#aaa";
+
+            updateUI();
+        }
+
+        // Init
+        updateUI();
+    </script>
+</body>
+</html>

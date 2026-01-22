@@ -1,32 +1,83 @@
+using System;
+using System.Threading.Tasks;
 using System.Windows;
+using Autodesk.Revit.UI;
+using RevitAI.Isolation;
+using RevitAI.Services;
 
 namespace RevitAI.Views
 {
     public partial class InputWindow : Window
     {
-        public string PromptText { get; private set; } = string.Empty;
-        public bool IsConfirmed { get; private set; } = false;
+        private readonly ExternalEvent _externalEvent;
+        private readonly AIRequestHandler _requestHandler;
+        private readonly string _apiKey;
 
-        public InputWindow()
+        public InputWindow(ExternalEvent externalEvent, AIRequestHandler handler, string apiKey)
         {
             InitializeComponent();
+            _externalEvent = externalEvent;
+            _requestHandler = handler;
+            _apiKey = apiKey;
         }
 
-        private void GenerateButton_Click(object sender, RoutedEventArgs e)
+        private async void GenerateButton_Click(object sender, RoutedEventArgs e)
         {
-            PromptText = InputTextBox.Text;
-            if (string.IsNullOrWhiteSpace(PromptText))
+            string promptText = InputTextBox.Text;
+            if (string.IsNullOrWhiteSpace(promptText))
             {
                 MessageBox.Show("请输入有效的指令。", "提示");
                 return;
             }
 
-            IsConfirmed = true;
-            StatusText.Text = "正在处理...";
+            // 更新 UI 状态
+            StatusText.Text = "正在思考中 (AI Processing)...";
             GenerateButton.IsEnabled = false;
-            
-            // 关闭窗口以返回控制权给外部命令
-            this.Close();
+            InputTextBox.IsEnabled = false;
+
+            try
+            {
+                // 在后台线程运行 AI 逻辑，不阻塞 UI 线程
+                WallRequest? request = await Task.Run(async () =>
+                {
+                    string? jsonResult = await IsolatedRunner.RunParseWallRequestAsync(_apiKey, promptText);
+                    if (!string.IsNullOrEmpty(jsonResult))
+                    {
+                        return System.Text.Json.JsonSerializer.Deserialize<WallRequest>(jsonResult);
+                    }
+                    return null;
+                });
+
+                if (request != null)
+                {
+                    StatusText.Text = "AI 解析成功，正在生成模型...";
+                    
+                    // 将数据传递给 Handler
+                    _requestHandler.Request = request;
+                    
+                    // 触发外部事件，通知 Revit 在主线程执行
+                    _externalEvent.Raise();
+
+                    // 可以在这里关闭窗口，或者等待完成后手动关闭
+                    // 为了演示流程，我们保持窗口开启，直到用户手动关闭
+                    StatusText.Text = "指令已发送给 Revit，请检查模型。";
+                    GenerateButton.IsEnabled = true;
+                    InputTextBox.IsEnabled = true;
+                }
+                else
+                {
+                    StatusText.Text = "AI 无法理解该指令，请重试。";
+                    GenerateButton.IsEnabled = true;
+                    InputTextBox.IsEnabled = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = "发生错误";
+                MessageBox.Show($"AI 服务调用失败: {ex.Message}", "错误");
+                GenerateButton.IsEnabled = true;
+                InputTextBox.IsEnabled = true;
+            }
         }
     }
 }
