@@ -10,7 +10,7 @@ namespace RevitAI.Isolation
         /// <summary>
         /// 在隔离的 AssemblyLoadContext 中运行 AI 逻辑，避免依赖冲突。
         /// </summary>
-        public static async Task<string?> RunParseWallRequestAsync(string apiKey, string userInput)
+        public static async Task<string?> RunProcessRequestAsync(string apiKey, string userInput)
         {
             // 获取当前程序集路径 (RevitAI.dll)
             string assemblyPath = Assembly.GetExecutingAssembly().Location;
@@ -36,17 +36,14 @@ namespace RevitAI.Isolation
                 if (aiServiceType == null) throw new InvalidOperationException("Could not find AIService type in isolated assembly.");
 
                 // 3. 创建实例
-                object? instance = Activator.CreateInstance(aiServiceType, new object[] { apiKey, "gpt-4o" });
+                object? instance = Activator.CreateInstance(aiServiceType, new object[] { apiKey, "gpt-4o-mini" });
 
-                // 4. 获取方法 ParseWallRequestJsonAsync (我们需要一个返回 string 的方法以避免类型转换问题)
-                MethodInfo? method = aiServiceType.GetMethod("ParseWallRequestJsonAsync");
+                // 4. 获取方法 ProcessRequestJsonAsync
+                MethodInfo? method = aiServiceType.GetMethod("ProcessRequestJsonAsync");
                 
-                // 如果没有 Json 版本，我们先添加一个扩展或修改 AIService
                 if (method == null)
                 {
-                     // Fallback: use existing method and serialize inside via dynamic?
-                     // Easier to add a helper method in AIService.cs
-                     throw new InvalidOperationException("Method ParseWallRequestJsonAsync not found.");
+                     throw new InvalidOperationException("Method ProcessRequestJsonAsync not found.");
                 }
 
                 // 5. 调用方法

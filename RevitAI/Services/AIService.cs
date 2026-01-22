@@ -1,25 +1,28 @@
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+using RevitAI.Plugins;
+using RevitAI.Models;
 using System;
+using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace RevitAI.Services
 {
     public class AIService
     {
-        private readonly Kernel _kernel;
+        private readonly Kernel _baseKernel;
         private readonly IChatCompletionService _chatService;
 
         public AIService(string apiKey, string modelId = "gpt-4o-mini")
         {
             // Initialize Semantic Kernel with OpenAI
-            // NOTE: Ideally, use dependency injection or configuration for API keys.
             var builder = Kernel.CreateBuilder();
 
-            // 配置 HttpClient 以忽略 SSL 证书错误 (仅用于开发/调试环境)
-            // 如果你在公司网络或使用了代理，可能需要这个
+            // Configure HttpClient (Dev/Debug)
             var handler = new HttpClientHandler
             {
                 ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
@@ -27,53 +30,52 @@ namespace RevitAI.Services
             var httpClient = new HttpClient(handler);
             var endpoint = "https://api.openai-proxy.org/v1";
             httpClient.BaseAddress = new Uri(endpoint);
+            
             builder.AddOpenAIChatCompletion(modelId, apiKey, httpClient: httpClient);
-            _kernel = builder.Build();
-            _chatService = _kernel.GetRequiredService<IChatCompletionService>();
+            
+            _baseKernel = builder.Build();
+            _chatService = _baseKernel.GetRequiredService<IChatCompletionService>();
         }
 
-        /// <summary>
-        /// Helper method to return JSON string directly, easier for cross-context calls.
-        /// </summary>
-        public async Task<string?> ParseWallRequestJsonAsync(string userInput)
+        public async Task<string?> ProcessRequestJsonAsync(string userInput)
         {
-            var result = await ParseWallRequestAsync(userInput);
-            if (result == null) return null;
-            return JsonSerializer.Serialize(result);
+            var tasks = await ProcessRequestAsync(userInput);
+            if (tasks == null || !tasks.Any()) return null;
+            return JsonSerializer.Serialize(tasks);
         }
 
-        public async Task<WallRequest?> ParseWallRequestAsync(string userInput)
+        public async Task<List<RevitTask>> ProcessRequestAsync(string userInput)
         {
+            // Create a plugin instance to capture the tool call
+            var designPlugin = new RevitDesignPlugin();
+            
+            // Create a plugin collection and add our plugin
+            var plugins = new KernelPluginCollection();
+            plugins.AddFromObject(designPlugin, "RevitDesign");
+
+            // Create a scoped kernel that shares the base services but has specific plugins
+            var scopedKernel = new Kernel(_baseKernel.Services, plugins);
+
             var history = new ChatHistory();
-            history.AddSystemMessage(@"You are a Revit AI assistant. 
-Your goal is to extract wall creation parameters from the user's natural language request.
-Return ONLY a valid JSON object. Do not include markdown code blocks (```json ... ```).
-The JSON must follow this schema:
-{
-    ""Length"": (number, length in meters),
-    ""Height"": (number, height in meters),
-    ""LevelName"": (string, name of the level, default to 'Level 1' if not specified)
-}
-Example output:
-{ ""Length"": 5.5, ""Height"": 3.0, ""LevelName"": ""Level 1"" }");
-
+            history.AddSystemMessage("You are a Revit AI assistant. Help the user create architectural elements by calling the appropriate functions. Always use the tools provided.");
             history.AddUserMessage(userInput);
+
+            var settings = new OpenAIPromptExecutionSettings
+            {
+                ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions
+            };
 
             try
             {
-                var result = await _chatService.GetChatMessageContentAsync(history);
-                string content = result.Content ?? "{}";
+                // Pass the scoped kernel so the chat service can find and invoke the plugin
+                await _chatService.GetChatMessageContentAsync(history, settings, scopedKernel);
 
-                // Simple cleanup if LLM returns markdown code blocks despite instructions
-                content = content.Replace("```json", "").Replace("```", "").Trim();
-
-                return JsonSerializer.Deserialize<WallRequest>(content);
+                // Return all captured tasks
+                return designPlugin.PendingTasks;
             }
             catch (Exception ex)
             {
-                // Handle parsing errors or API errors
                 System.Diagnostics.Debug.WriteLine($"AI Error: {ex.Message}");
-                // Rethrow to see error in caller
                 throw;
             }
         }

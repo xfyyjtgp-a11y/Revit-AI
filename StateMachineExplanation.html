@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>C# 状态机底层工作原理</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Consolas, sans-serif;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        h1 { color: #569cd6; }
+        
+        .main-container {
+            display: flex;
+            gap: 20px;
+            width: 1200px;
+            margin-top: 20px;
+        }
+
+        .code-box {
+            background-color: #252526;
+            border: 1px solid #454545;
+            border-radius: 6px;
+            padding: 10px;
+            font-family: 'Consolas', monospace;
+            font-size: 14px;
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .title {
+            color: #dcdcaa;
+            font-weight: bold;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #454545;
+            padding-bottom: 5px;
+            display: block;
+        }
+
+        .line {
+            padding: 2px 5px;
+            transition: background 0.2s;
+            white-space: pre;
+        }
+
+        .active-line {
+            background-color: #264f78;
+            color: #ffffff;
+        }
+
+        /* 状态机内存视图 */
+        .memory-view {
+            width: 300px;
+            background-color: #000;
+            border: 2px solid #569cd6;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .field {
+            margin: 5px 0;
+            padding: 5px;
+            background-color: #333;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .field-name { color: #9cdcfe; }
+        .field-value { color: #ce9178; font-weight: bold; }
+        
+        .changed { animation: flash 1s; }
+
+        @keyframes flash {
+            0% { background-color: #ce9178; color: black; }
+            100% { background-color: #333; color: #ce9178; }
+        }
+
+        /* 流程控制 */
+        .controls {
+            margin-top: 30px;
+            display: flex;
+            gap: 15px;
+        }
+
+        button {
+            padding: 10px 25px;
+            font-size: 16px;
+            background-color: #0e639c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:disabled { background-color: #555; }
+
+        .explanation {
+            width: 1200px;
+            margin-top: 20px;
+            background-color: #333;
+            padding: 15px;
+            border-radius: 6px;
+            min-height: 60px;
+            border-left: 4px solid #ce9178;
+        }
+
+        .arrow {
+            position: absolute;
+            right: -25px;
+            top: 50%;
+            font-size: 24px;
+            color: #569cd6;
+        }
+
+        /* 状态标记 */
+        .state-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .state-running { background-color: #4ec9b0; color: black; }
+        .state-suspended { background-color: #f44747; color: white; }
+
+    </style>
+</head>
+<body>
+
+    <h1>状态机 (StateMachine) 底层运作详解</h1>
+
+    <div class="main-container">
+        <!-- 左侧：你的源代码 -->
+        <div class="code-box" style="flex: 0.8;">
+            <span class="title">1. 你写的代码 (Source)</span>
+            <div id="src-1" class="line">public async Task MyMethod() {</div>
+            <div id="src-2" class="line">    int x = 10;</div>
+            <div id="src-3" class="line">    Console.WriteLine("Step 1");</div>
+            <div id="src-4" class="line">    await Task.Delay(1000);</div>
+            <div id="src-5" class="line">    Console.WriteLine("Step 2");</div>
+            <div id="src-6" class="line">    Console.WriteLine(x);</div>
+            <div id="src-7" class="line">}</div>
+        </div>
+
+        <!-- 中间：编译器生成的代码 -->
+        <div class="code-box" style="flex: 1.2;">
+            <span class="title">2. 编译器生成的 MoveNext()</span>
+            <div id="gen-1" class="line">void MoveNext() {</div>
+            <div id="gen-2" class="line">  try {</div>
+            <div id="gen-3" class="line">    if (state == -1) { // 初始状态</div>
+            <div id="gen-4" class="line">      this.x = 10; <span style="color:gray">// 局部变量变字段!</span></div>
+            <div id="gen-5" class="line">      Console.WriteLine("Step 1");</div>
+            <div id="gen-6" class="line">      task = Task.Delay(1000);</div>
+            <div id="gen-7" class="line">      awaiter = task.GetAwaiter();</div>
+            <div id="gen-8" class="line">      if (!awaiter.IsCompleted) {</div>
+            <div id="gen-9" class="line">        state = 0; <span style="color:gray">// 标记：下次从0开始</span></div>
+            <div id="gen-10" class="line">        builder.AwaitUnsafeOnCompleted(awaiter, this);</div>
+            <div id="gen-11" class="line">        return; <span style="color:#ce9178">// 线程释放!</span></div>
+            <div id="gen-12" class="line">      }</div>
+            <div id="gen-13" class="line">    }</div>
+            <div id="gen-14" class="line">    if (state == 0) { // 恢复状态</div>
+            <div id="gen-15" class="line">      awaiter.GetResult();</div>
+            <div id="gen-16" class="line">      Console.WriteLine("Step 2");</div>
+            <div id="gen-17" class="line">      Console.WriteLine(this.x); <span style="color:gray">// 此时 x 依然存在!</span></div>
+            <div id="gen-18" class="line">    }</div>
+            <div id="gen-19" class="line">  } catch...</div>
+            <div id="gen-20" class="line">}</div>
+        </div>
+
+        <!-- 右侧：内存中的状态机对象 -->
+        <div class="memory-view">
+            <span class="title">3. 堆内存中的对象 (Heap)</span>
+            <div style="text-align:center; margin-bottom:10px;">
+                <span id="obj-status" class="state-badge state-running">Running</span>
+            </div>
+            <div class="field">
+                <span class="field-name">State</span>
+                <span class="field-value" id="val-state">-1</span>
+            </div>
+            <div class="field">
+                <span class="field-name">x (int)</span>
+                <span class="field-value" id="val-x">0</span>
+            </div>
+            <div class="field">
+                <span class="field-name">awaiter</span>
+                <span class="field-value" id="val-awaiter">null</span>
+            </div>
+            <div class="field">
+                <span class="field-name">builder</span>
+                <span class="field-value">TaskBuilder</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="explanation" id="explain-text">
+        准备就绪。点击“下一步”查看状态机如何被创建和执行。
+    </div>
+
+    <div class="controls">
+        <button id="btn-step" onclick="next()">下一步</button>
+        <button onclick="reset()">重置</button>
+    </div>
+
+    <script>
+        let step = 0;
+        const explain = document.getElementById('explain-text');
+        const valState = document.getElementById('val-state');
+        const valX = document.getElementById('val-x');
+        const valAwaiter = document.getElementById('val-awaiter');
+        const objStatus = document.getElementById('obj-status');
+        const btnStep = document.getElementById('btn-step');
+
+        function highlight(srcId, genId) {
+            document.querySelectorAll('.line').forEach(el => el.classList.remove('active-line'));
+            if(srcId) document.getElementById(srcId).classList.add('active-line');
+            if(genId) document.getElementById(genId).classList.add('active-line');
+        }
+
+        function updateVal(el, val) {
+            el.innerText = val;
+            el.parentElement.classList.remove('changed');
+            void el.parentElement.offsetWidth; // trigger reflow
+            el.parentElement.classList.add('changed');
+        }
+
+        function next() {
+            step++;
+            switch(step) {
+                case 1:
+                    explain.innerText = "1. 方法被调用。编译器创建了一个状态机对象实例。初始 State 设为 -1。";
+                    highlight('src-1', 'gen-1');
+                    updateVal(valState, "-1");
+                    break;
+                case 2:
+                    explain.innerText = "2. 第一次调用 MoveNext()。检查 State == -1，进入第一块逻辑。";
+                    highlight('src-1', 'gen-3');
+                    break;
+                case 3:
+                    explain.innerText = "3. 执行同步代码。注意：局部变量 x 被赋值给了状态机的【字段】this.x。这很重要！因为字段存在堆上，不会随函数返回而消失。";
+                    highlight('src-2', 'gen-4');
+                    updateVal(valX, "10");
+                    break;
+                case 4:
+                    explain.innerText = "4. 执行到 await。创建 Task 并获取 awaiter。";
+                    highlight('src-4', 'gen-7');
+                    updateVal(valAwaiter, "TaskAwaiter");
+                    break;
+                case 5:
+                    explain.innerText = "5. 关键点：检查 IsCompleted。假设任务需要很久，这里返回 false。";
+                    highlight(null, 'gen-8');
+                    break;
+                case 6:
+                    explain.innerText = "6. 【保存现场】将 State 设为 0。这意味着：“下次回来，请直接去 case 0 那里”。";
+                    highlight(null, 'gen-9');
+                    updateVal(valState, "0");
+                    break;
+                case 7:
+                    explain.innerText = "7. 【注册回调】告诉系统：“等 awaiter 好了，请重新调用我的 MoveNext()”。然后直接 Return！线程释放！";
+                    highlight(null, 'gen-10');
+                    objStatus.className = "state-badge state-suspended";
+                    objStatus.innerText = "Suspended (In Heap)";
+                    btnStep.innerText = "等待回调...";
+                    btnStep.disabled = true;
+                    
+                    setTimeout(() => {
+                        btnStep.disabled = false;
+                        btnStep.innerText = "回调触发 (Resume)";
+                        explain.innerText = "8. (3秒后...) 任务完成！系统找到了堆里的这个状态机对象，再次调用了 MoveNext()。";
+                    }, 2000);
+                    break;
+                case 8:
+                    explain.innerText = "9. 第二次进入 MoveNext()。这次 State 是 0，所以直接跳过前面的代码，进入 if (state == 0) 的分支。";
+                    highlight(null, 'gen-14');
+                    objStatus.className = "state-badge state-running";
+                    objStatus.innerText = "Running";
+                    break;
+                case 9:
+                    explain.innerText = "10. 获取结果，继续执行。注意：它成功读取了之前保存的 this.x (10)。";
+                    highlight('src-6', 'gen-17');
+                    break;
+                case 10:
+                    explain.innerText = "11. 状态机结束。";
+                    highlight('src-7', 'gen-20');
+                    updateVal(valState, "-2 (Done)");
+                    btnStep.disabled = true;
+                    break;
+            }
+        }
+
+        function reset() {
+            step = 0;
+            document.querySelectorAll('.line').forEach(el => el.classList.remove('active-line'));
+            valState.innerText = "-1";
+            valX.innerText = "0";
+            valAwaiter.innerText = "null";
+            objStatus.className = "state-badge state-running";
+            objStatus.innerText = "Running";
+            explain.innerText = "准备就绪。";
+            btnStep.disabled = false;
+            btnStep.innerText = "下一步";
+        }
+    </script>
+</body>
+</html>

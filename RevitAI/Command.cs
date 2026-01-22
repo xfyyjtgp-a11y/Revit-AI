@@ -4,10 +4,12 @@ using Autodesk.Revit.UI;
 using RevitAI.Services;
 using RevitAI.Views;
 using RevitAI.Isolation;
+using RevitAI.Models;
 using System;
 using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace RevitAI
 {
@@ -67,19 +69,19 @@ namespace RevitAI
                 if (inputWindow.IsConfirmed && !string.IsNullOrWhiteSpace(inputWindow.PromptText))
                 {
                     // 3. 调用 AI 解析意图 (使用隔离上下文)
-                    WallRequest? request = null;
+                    List<RevitTask>? tasks = null;
                     
                     try
                     {
                         // 使用 IsolatedRunner 在独立上下文中运行 AI
                         string? jsonResult = Task.Run(async () => 
                         {
-                            return await IsolatedRunner.RunParseWallRequestAsync(apiKey, inputWindow.PromptText);
+                            return await IsolatedRunner.RunProcessRequestAsync(apiKey, inputWindow.PromptText);
                         }).GetAwaiter().GetResult();
 
                         if (!string.IsNullOrEmpty(jsonResult))
                         {
-                            request = System.Text.Json.JsonSerializer.Deserialize<WallRequest>(jsonResult);
+                            tasks = System.Text.Json.JsonSerializer.Deserialize<List<RevitTask>>(jsonResult);
                         }
                     }
                     catch (Exception ex)
@@ -88,18 +90,17 @@ namespace RevitAI
                         return Result.Failed;
                     }
 
-                    if (request != null)
+                    if (tasks != null && tasks.Count > 0)
                     {
                         // 4. 执行 Revit 模型创建
-                        var creator = new RevitModelCreator(commandData.Application.ActiveUIDocument.Document);
-                        creator.CreateWall(request);
+                        var processor = new RevitTaskProcessor(commandData.Application.ActiveUIDocument.Document);
+                        processor.ProcessTasks(tasks);
                         
-                        TaskDialog.Show("成功", $"已成功创建墙体：\n长度: {request.Length}m\n高度: {request.Height}m\n标高: {request.LevelName}");
+                        TaskDialog.Show("成功", $"已成功处理 {tasks.Count} 个任务。");
                     }
                     else
                     {
-                        TaskDialog.Show("AI Error", "AI 无法解析您的请求，请重试。");
-                        return Result.Failed;
+                        TaskDialog.Show("提示", "AI 未能识别出有效的建模指令。");
                     }
                 }
 

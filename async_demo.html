@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C# Async/Await 可视化演示</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); max-width: 800px; width: 100%; }
+        h1 { color: #333; text-align: center; }
+        .scenario { margin-bottom: 30px; border: 1px solid #eee; padding: 20px; border-radius: 8px; }
+        .thread-track { display: flex; align-items: center; margin: 10px 0; height: 60px; background: #fafafa; border-radius: 30px; position: relative; overflow: hidden; border: 1px solid #ddd; }
+        .thread-label { width: 100px; font-weight: bold; padding-left: 15px; z-index: 2; }
+        .worker { width: 40px; height: 40px; border-radius: 50%; background: #0078d4; color: white; display: flex; align-items: center; justify-content: center; position: absolute; left: 120px; transition: left 0.5s linear; z-index: 1; font-size: 20px; }
+        .task-block { height: 40px; background: #ffaa00; position: absolute; top: 10px; border-radius: 4px; opacity: 0.7; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; }
+        .btn { background: #0078d4; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px; margin: 5px; }
+        .btn:hover { background: #005a9e; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+        .log { background: #1e1e1e; color: #00ff00; font-family: 'Consolas', monospace; padding: 15px; border-radius: 5px; height: 200px; overflow-y: auto; margin-top: 20px; font-size: 14px; }
+        .code-block { background: #f4f4f4; padding: 10px; border-left: 4px solid #0078d4; font-family: monospace; margin: 10px 0; }
+        .wait-indicator { position: absolute; color: #666; font-style: italic; font-size: 12px; top: 45px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Async/Await 到底发生了什么？</h1>
+        
+        <div class="scenario">
+            <h3>场景：去餐厅点餐 (UI 线程)</h3>
+            <div class="code-block">
+                async Task OrderFood() {<br>
+                &nbsp;&nbsp;Log("点餐...");<br>
+                &nbsp;&nbsp;await CookFoodAsync(); // 耗时操作<br>
+                &nbsp;&nbsp;Log("取餐，开吃！");<br>
+                }
+            </div>
+
+            <div class="thread-track">
+                <div class="thread-label">UI 线程</div>
+                <div id="worker-ui" class="worker">👨‍💼</div>
+                <!-- Task blocks will be added here dynamically -->
+            </div>
+            
+            <div class="thread-track">
+                <div class="thread-label">厨房/IO</div>
+                <!-- IO operations happen here -->
+            </div>
+
+            <div style="text-align: center; margin-top: 20px;">
+                <button id="btn-sync" class="btn">同步方式 (卡死)</button>
+                <button id="btn-async" class="btn">Async/Await (流畅)</button>
+            </div>
+        </div>
+
+        <div class="log" id="log-console">
+            > 系统就绪...<br>
+        </div>
+    </div>
+
+    <script>
+        const workerUI = document.getElementById('worker-ui');
+        const logConsole = document.getElementById('log-console');
+        let isRunning = false;
+
+        function log(msg) {
+            const time = new Date().toLocaleTimeString();
+            logConsole.innerHTML += `[${time}] ${msg}<br>`;
+            logConsole.scrollTop = logConsole.scrollHeight;
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        async function moveWorker(worker, start, end, duration) {
+            const startTime = performance.now();
+            
+            return new Promise(resolve => {
+                function animate(currentTime) {
+                    const elapsed = currentTime - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    
+                    const currentPos = start + (end - start) * progress;
+                    worker.style.left = `${currentPos}px`;
+
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    } else {
+                        resolve();
+                    }
+                }
+                requestAnimationFrame(animate);
+            });
+        }
+
+        // 模拟同步阻塞
+        document.getElementById('btn-sync').addEventListener('click', async () => {
+            if (isRunning) return;
+            isRunning = true;
+            log("--- 开始同步点餐 (Thread.Sleep) ---");
+            
+            workerUI.style.backgroundColor = "#d13438"; // 变红表示阻塞
+            workerUI.innerText = "😫";
+            
+            // 1. 点餐
+            log("👨‍💼 UI 线程: 开始点餐");
+            await moveWorker(workerUI, 120, 200, 500);
+            
+            // 2. 等待 (卡死)
+            log("🚫 UI 线程: 等待厨师做饭... (界面卡死，无法响应鼠标)");
+            // 在真实代码中这里是 Thread.Sleep(2000)，JS里我们用动画模拟“卡住不动”
+            await sleep(2000); 
+            
+            // 3. 取餐
+            log("👨‍💼 UI 线程: 饭好了，取餐");
+            await moveWorker(workerUI, 200, 300, 500);
+            
+            workerUI.style.backgroundColor = "#0078d4";
+            workerUI.innerText = "👨‍💼";
+            workerUI.style.left = "120px"; // Reset
+            log("--- 结束 ---");
+            isRunning = false;
+        });
+
+        // 模拟 Async/Await
+        document.getElementById('btn-async').addEventListener('click', async () => {
+            if (isRunning) return;
+            isRunning = true;
+            log("--- 开始异步点餐 (await) ---");
+            
+            workerUI.style.backgroundColor = "#0078d4";
+            workerUI.innerText = "👨‍💼";
+
+            // 1. 点餐
+            log("👨‍💼 UI 线程: 开始点餐");
+            await moveWorker(workerUI, 120, 200, 500);
+
+            // 2. 遇到 await
+            log("⚡ 遇到 await! UI 线程: '厨房你先做，我去忙别的'");
+            
+            // UI 线程“飞”回去处理其他事情（响应鼠标、重绘界面）
+            const originalPos = workerUI.style.left;
+            workerUI.style.opacity = "0.5"; // 虚化表示释放控制权
+            workerUI.innerText = "👻";
+            log("✨ UI 线程已释放，界面保持流畅响应...");
+            
+            // 模拟耗时操作 (在后台/IO)
+            const kitchenTask = document.createElement('div');
+            kitchenTask.className = 'task-block';
+            kitchenTask.style.left = '200px';
+            kitchenTask.style.width = '0px';
+            kitchenTask.style.top = '10px';
+            kitchenTask.style.background = '#ffaa00';
+            kitchenTask.innerText = "做饭中...";
+            document.querySelectorAll('.thread-track')[1].appendChild(kitchenTask); // Add to kitchen track
+
+            // 厨房干活 (动画)
+            const startTime = performance.now();
+            while (performance.now() - startTime < 2000) {
+                const width = (performance.now() - startTime) / 2000 * 200;
+                kitchenTask.style.width = `${width}px`;
+                await sleep(16);
+            }
+            
+            // 3. await 结束，恢复上下文
+            log("🔔 叮！饭好了 (Task 完成)");
+            kitchenTask.remove();
+            
+            workerUI.style.opacity = "1";
+            workerUI.innerText = "👨‍💼";
+            log("🔙 UI 线程: '我回来了，继续执行 await 后面的代码'");
+            
+            // 继续执行
+            await moveWorker(workerUI, 200, 300, 500);
+            log("🍽️ UI 线程: 取餐，开吃！");
+
+            workerUI.style.left = "120px"; // Reset
+            log("--- 结束 ---");
+            isRunning = false;
+        });
+    </script>
+</body>
+</html>
