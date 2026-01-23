@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Windows;
 using Autodesk.Revit.UI;
 using RevitAI.Isolation;
 using RevitAI.Services;
+using RevitAI.Models;
 
 namespace RevitAI.Views
 {
@@ -20,6 +22,8 @@ namespace RevitAI.Views
             _requestHandler = handler;
             _apiKey = apiKey;
         }
+
+        public string PromptText => InputTextBox.Text;
 
         private async void GenerateButton_Click(object sender, RoutedEventArgs e)
         {
@@ -38,22 +42,22 @@ namespace RevitAI.Views
             try
             {
                 // 在后台线程运行 AI 逻辑，不阻塞 UI 线程
-                WallRequest? request = await Task.Run(async () =>
+                List<RevitTask>? tasks = await Task.Run(async () =>
                 {
-                    string? jsonResult = await IsolatedRunner.RunParseWallRequestAsync(_apiKey, promptText);
+                    string? jsonResult = await IsolatedRunner.RunProcessRequestAsync(_apiKey, promptText);
                     if (!string.IsNullOrEmpty(jsonResult))
                     {
-                        return System.Text.Json.JsonSerializer.Deserialize<WallRequest>(jsonResult);
+                        return System.Text.Json.JsonSerializer.Deserialize<List<RevitTask>>(jsonResult);
                     }
                     return null;
                 });
 
-                if (request != null)
+                if (tasks != null && tasks.Count > 0)
                 {
                     StatusText.Text = "AI 解析成功，正在生成模型...";
                     
                     // 将数据传递给 Handler
-                    _requestHandler.Request = request;
+                    _requestHandler.Tasks = tasks;
                     
                     // 触发外部事件，通知 Revit 在主线程执行
                     _externalEvent.Raise();

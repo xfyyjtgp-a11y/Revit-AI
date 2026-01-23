@@ -4,6 +4,7 @@ using Autodesk.Revit.UI;
 using RevitAI.Views;
 using RevitAI.Isolation;
 using RevitAI.Models;
+using RevitAI.Services;
 using System;
 using System.IO;
 using System.Reflection;
@@ -66,6 +67,8 @@ namespace RevitAI
                 // 2. 检查窗口是否已打开
                 if (_inputWindow != null && _inputWindow.IsLoaded)
                 {
+                    string promptText = _inputWindow.PromptText;
+
                     // 3. 调用 AI 解析意图 (使用隔离上下文)
                     List<RevitTask>? tasks = null;
                     
@@ -74,7 +77,7 @@ namespace RevitAI
                         // 使用 IsolatedRunner 在独立上下文中运行 AI
                         string? jsonResult = Task.Run(async () => 
                         {
-                            return await IsolatedRunner.RunProcessRequestAsync(apiKey, inputWindow.PromptText);
+                            return await IsolatedRunner.RunProcessRequestAsync(apiKey, promptText);
                         }).GetAwaiter().GetResult();
 
                         if (!string.IsNullOrEmpty(jsonResult))
@@ -100,6 +103,8 @@ namespace RevitAI
                     {
                         TaskDialog.Show("提示", "AI 未能识别出有效的建模指令。");
                     }
+
+                    return Result.Succeeded;
                 }
 
                 // 3. 初始化外部事件

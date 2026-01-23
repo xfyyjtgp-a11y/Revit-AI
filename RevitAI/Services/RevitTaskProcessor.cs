@@ -96,7 +96,7 @@ namespace RevitAI.Services
             Line geomLine = Line.CreateBound(start, end);
 
             // Get a Wall Type
-            WallType wallType = new FilteredElementCollector(_doc)
+            WallType? wallType = new FilteredElementCollector(_doc)
                 .OfClass(typeof(WallType))
                 .WhereElementIsElementType()
                 .Cast<WallType>()
