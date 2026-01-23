@@ -2,7 +2,6 @@ using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RevitAI.Views;
-<<<<<<< HEAD
 using RevitAI.Isolation;
 using RevitAI.Models;
 using System;
@@ -10,11 +9,6 @@ using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-=======
-using System;
-using System.IO;
-using System.Reflection;
->>>>>>> 28e3ac3b842c69db61e835714679f68146f36e40
 
 namespace RevitAI
 {
@@ -72,7 +66,6 @@ namespace RevitAI
                 // 2. 检查窗口是否已打开
                 if (_inputWindow != null && _inputWindow.IsLoaded)
                 {
-<<<<<<< HEAD
                     // 3. 调用 AI 解析意图 (使用隔离上下文)
                     List<RevitTask>? tasks = null;
                     
@@ -107,10 +100,6 @@ namespace RevitAI
                     {
                         TaskDialog.Show("提示", "AI 未能识别出有效的建模指令。");
                     }
-=======
-                    _inputWindow.Activate();
-                    return Result.Succeeded;
->>>>>>> 28e3ac3b842c69db61e835714679f68146f36e40
                 }
 
                 // 3. 初始化外部事件
