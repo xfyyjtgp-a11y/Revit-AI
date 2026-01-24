@@ -40,7 +40,7 @@ namespace RevitAI.Services
         public async Task<string?> ProcessRequestJsonAsync(string userInput)
         {
             var tasks = await ProcessRequestAsync(userInput);
-            if (tasks == null || !tasks.Any()) return null;
+            if (tasks == null || tasks.Count == 0) return null;
             return JsonSerializer.Serialize(tasks);
         }
 

@@ -55,75 +55,16 @@ namespace RevitAI
         {
             try
             {
-                // 1. 获取 API Key
-                string apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? OPENAI_API_KEY;
-                
-                if (apiKey.Contains("YOUR_OPENAI_API_KEY"))
+                if (_inputWindow == null || !_inputWindow.IsLoaded)
                 {
-                    TaskDialog.Show("配置错误", "请配置有效的 OpenAI API Key。");
-                    return Result.Cancelled;
+                    var handler = new AIRequestHandler();
+                    var exEvent = ExternalEvent.Create(handler);
+                    _inputWindow = new InputWindow(exEvent, handler, OPENAI_API_KEY);
                 }
-
-                // 2. 检查窗口是否已打开
-                if (_inputWindow != null && _inputWindow.IsLoaded)
-                {
-                    string promptText = _inputWindow.PromptText;
-
-                    // 3. 调用 AI 解析意图 (使用隔离上下文)
-                    List<RevitTask>? tasks = null;
-                    
-                    try
-                    {
-                        // 使用 IsolatedRunner 在独立上下文中运行 AI
-                        string? jsonResult = Task.Run(async () => 
-                        {
-                            return await IsolatedRunner.RunProcessRequestAsync(apiKey, promptText);
-                        }).GetAwaiter().GetResult();
-
-                        if (!string.IsNullOrEmpty(jsonResult))
-                        {
-                            tasks = System.Text.Json.JsonSerializer.Deserialize<List<RevitTask>>(jsonResult);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        TaskDialog.Show("AI Error", $"AI 服务调用失败: {ex.Message}\n\nStack: {ex.StackTrace}\nInner: {ex.InnerException?.Message}");
-                        return Result.Failed;
-                    }
-
-                    if (tasks != null && tasks.Count > 0)
-                    {
-                        // 4. 执行 Revit 模型创建
-                        var processor = new RevitTaskProcessor(commandData.Application.ActiveUIDocument.Document);
-                        processor.ProcessTasks(tasks);
-                        
-                        TaskDialog.Show("成功", $"已成功处理 {tasks.Count} 个任务。");
-                    }
-                    else
-                    {
-                        TaskDialog.Show("提示", "AI 未能识别出有效的建模指令。");
-                    }
-
-                    return Result.Succeeded;
-                }
-
-                // 3. 初始化外部事件
-                // 创建 Handler (处理模型修改)
-                AIRequestHandler handler = new AIRequestHandler();
-                // 创建 ExternalEvent (注册到 Revit)
-                ExternalEvent exEvent = ExternalEvent.Create(handler);
-
-                // 4. 显示非模态窗口 (Modeless)
-                // 窗口不再阻塞 Revit 主线程，用户可以继续操作 Revit
-                // 当点击生成时，窗口会在后台运行 AI，然后通过 exEvent 通知 Revit 修改模型
-                _inputWindow = new InputWindow(exEvent, handler, apiKey);
                 
-                // 设置窗口 Owner 为 Revit 主窗口 (可选，防止窗口跑到 Revit 后面)
-                // 这里简单使用 .Show()
                 _inputWindow.Show();
-
-                // 5. 立即返回 Succeeded
-                // Revit 认为命令已完成，恢复响应。实际的 AI 任务在后台继续。
+                _inputWindow.Activate();
+                
                 return Result.Succeeded;
             }
             catch (Exception ex)
