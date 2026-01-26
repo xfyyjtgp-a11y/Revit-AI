@@ -21,7 +21,7 @@ namespace RevitAI
         private const string OPENAI_API_KEY = "sk-wiwex9n08EZK9GwacRy4u4s3vJNykHRnc17vTLjxkrJ7kSBf";
         
         // 保持对 Window 的静态引用，避免重复打开或被 GC 回收
-        public static InputWindow? _inputWindow;
+        public static MainWindow? _mainWindow;
 
         static Command()
         {
@@ -55,15 +55,18 @@ namespace RevitAI
         {
             try
             {
-                if (_inputWindow == null || !_inputWindow.IsLoaded)
+                if (_mainWindow == null || !_mainWindow.IsLoaded)
                 {
+                    // Initialize Revit Context
+                    ConstantParameter.CommandData = commandData;
+
                     var handler = new AIRequestHandler();
                     var exEvent = ExternalEvent.Create(handler);
-                    _inputWindow = new InputWindow(exEvent, handler, OPENAI_API_KEY);
+                    _mainWindow = new MainWindow(exEvent, handler, OPENAI_API_KEY);
                 }
                 
-                _inputWindow.Show();
-                _inputWindow.Activate();
+                _mainWindow.Show();
+                _mainWindow.Activate();
                 
                 return Result.Succeeded;
             }

@@ -48,7 +48,9 @@ namespace RevitAI.Isolation
 
                 // 5. 调用方法
                 Task<string?> task = (Task<string?>)method.Invoke(instance, new object[] { userInput })!;
-                
+
+              
+
                 return await task.ConfigureAwait(false);
             }
             finally
