@@ -19,7 +19,9 @@
         <Button Grid.Row="0" Content="打开 Revit 文件" Command="{Binding OpenFileCommand}" Margin="0,0,0,10" Padding="10,5"/>
 
         <GroupBox Grid.Row="1" Header="Revit 族列表">
-            <TreeView ItemsSource="{Binding Families}" Margin="5">
+            <TreeView ItemsSource="{Binding Families}" Margin="5"
+                      VirtualizingStackPanel.IsVirtualizing="True"
+                      VirtualizingStackPanel.VirtualizationMode="Recycling">
                 <TreeView.Resources>
                     <HierarchicalDataTemplate DataType="{x:Type model:RevitFamily}" ItemsSource="{Binding Types}">
                         <StackPanel Orientation="Horizontal">
